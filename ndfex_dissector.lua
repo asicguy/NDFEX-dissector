@@ -28,13 +28,13 @@ do
 
       pinfo.cols.protocol = "NDFEX"
       local subtree = tree:add(ndfex_proto,buffer(),"NDFEX Protocol Header")
-      
+
       subtree:add_le(magic_number, buffer(0,8))
       subtree:add_le(length, buffer(8,2))
       subtree:add_le(seq_num, buffer(10,4))
       subtree:add_le(timestamp, buffer(14,8))
-      subtree:add_le(msg_type, buffer(22,1)) 
-      
+      subtree:add_le(msg_type, buffer(22,1))
+
   end
 
   local udp_table = DissectorTable.get("udp.port")
@@ -52,10 +52,13 @@ do
   local F_quantity = ProtoField.uint32("ndfex.quantity", "Quantity", base.DEC)
   local F_price = ProtoField.int32("ndfex.price", "Price", base.DEC)
   local F_flags = ProtoField.uint8("ndfex.flags", "Flags", base.HEX)
-  
+  local F_bid_count = ProtoField.int32("ndfex.bid_count", "BidCount", base.DEC)
+  local F_ask_count = ProtoField.int32("ndfex.ask_count", "AskCount", base.DEC)
+  local F_last_seq_num = ProtoField.int32("ndfex.last_seq_num", "LastSeqNum", base.DEC)
+
   local F_type_s = ProtoField.string("ndfex.type", "Type", base.NONE)
 
-  ndfex_wrapper_proto.fields = { F_order_id, F_symbol, F_side, F_quantity, F_price, F_flags }
+  ndfex_wrapper_proto.fields = { F_order_id, F_symbol, F_side, F_quantity, F_price, F_flags, F_bid_count, F_ask_count, F_last_seq_num }
 
   local f_msg_type = Field.new("ndfex.msg_type")
   local original_ndfex_dissector
@@ -66,10 +69,14 @@ do
       local msg_type = f_msg_type()
 
       if msg_type then
-          
+
           local subtreeitem = treeitem:add(ndfex_wrapper_proto, tvbuffer)
 
-          if msg_type.value == 1 then -- new order
+          if msg_type.value == 0 then -- HeartBeat
+
+              subtreeitem:add(F_type_s, tvbuffer(), msg_type):set_text("TYPE : Heartbeat")
+
+          elseif msg_type.value == 1 then -- new order
 
               subtreeitem:add(F_type_s, tvbuffer(), msg_type):set_text("TYPE : New Order")
 
@@ -79,7 +86,7 @@ do
               subtreeitem:add_le(F_quantity, tvbuffer(36,4))
               subtreeitem:add_le(F_price, tvbuffer(40,4))
               subtreeitem:add_le(F_flags, tvbuffer(44,1))
-          
+
           elseif msg_type.value == 2 then -- delete order
 
               subtreeitem:add(F_type_s, tvbuffer(), msg_type):set_text("TYPE : Delete Order")
@@ -112,7 +119,16 @@ do
               subtreeitem:add_le(F_quantity, tvbuffer(28,4))
               subtreeitem:add_le(F_price, tvbuffer(32,4))
 
-          end
+          elseif msg_type.value == 6 then -- trade summary
+
+              subtreeitem:add(F_type_s, tvbuffer(), msg_type):set_text("TYPE : SnapShot")
+
+              subtreeitem:add_le(F_symbol, tvbuffer(23,4))
+              subtreeitem:add_le(F_bid_count, tvbuffer(27,4))
+              subtreeitem:add_le(F_ask_count, tvbuffer(31,4))
+              subtreeitem:add_le(F_last_seq_num, tvbuffer(35,4))
+
+         end
       end
   end
 
